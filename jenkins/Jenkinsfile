@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION = 'us-east-1'
         TF_VAR_FILE = 'terraform.tfvars'
-        EMAIL_RECIPIENTS = 'your-email@example.com' // Change to your email
+        EMAIL_RECIPIENTS = 'jeevan.s@aptean.com' 
     }
 
     parameters {
@@ -30,7 +30,7 @@ pipeline {
         stage('Initialize Terraform') {
             steps {
                 echo 'Initializing Terraform...'
-		sh 'cd terraform'
+                sh 'cd terraform'
                 sh 'terraform init'
             }
         }
@@ -96,17 +96,17 @@ pipeline {
 
         always {
             echo 'Pipeline execution completed!'
-            script {
-                def userInput = input(message: "Do you want to destroy the infrastructure?", ok: "Destroy", parameters: [booleanParam(defaultValue: false, description: 'Check to confirm', name: 'ConfirmDestroy')])
-                if (userInput) {
-                    stage('Destroy Terraform') {
-                        steps {
-                            echo 'Destroying Terraform resources...'
-                            sh 'terraform destroy -var-file=${TF_VAR_FILE} -auto-approve'
-                        }
-                    }
-                }
-            }
+            // script {
+            //     def userInput = input(message: "Do you want to destroy the infrastructure?", ok: "Destroy", parameters: [booleanParam(defaultValue: false, description: 'Check to confirm', name: 'ConfirmDestroy')])
+            //     if (userInput) {
+            //         stage('Destroy Terraform') {
+            //             steps {
+            //                 echo 'Destroying Terraform resources...'
+            //                 sh 'terraform destroy -var-file=${TF_VAR_FILE} -auto-approve'
+            //             }
+            //         }
+            //     }
+            // }
         }
     }
 }
