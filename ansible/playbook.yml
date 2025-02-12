@@ -2,14 +2,14 @@
   hosts: webserver
   become: yes
   tasks:
-    - name: Install Apache
-      apt:
-        name: apache2
+    - name: Install Apache (RHEL-based)
+      yum:
+        name: httpd
         state: present
 
-    - name: Start Apache
+    - name: Start Apache Service
       service:
-        name: apache2
+        name: httpd
         state: started
         enabled: yes
 
