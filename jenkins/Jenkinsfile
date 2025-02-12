@@ -1,0 +1,113 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = 'us-east-1'
+        TF_VAR_FILE = 'terraform.tfvars'
+        EMAIL_RECIPIENTS = 'your-email@example.com' // Change to your email
+    }
+
+    parameters {
+        string(name: 'AWS_REGION_PARAM', defaultValue: 'us-east-1', description: 'Enter AWS Region')
+    }
+
+    stages {
+        stage('Checkout Repository') {
+            steps {
+                echo 'Checking out repository...'
+                git 'https://github.com/your-repo/terraform-ansible-jenkins.git'
+            }
+        }
+
+        stage('Setup Verification') {
+            steps {
+                echo 'Checking Terraform and AWS CLI installation...'
+                sh 'terraform version'
+                sh 'aws --version'
+            }
+        }
+
+        stage('Initialize Terraform') {
+            steps {
+                echo 'Initializing Terraform...'
+		sh 'cd terraform'
+                sh 'terraform init'
+            }
+        }
+
+        stage('Validate Terraform Configuration') {
+            steps {
+                echo 'Validating Terraform configuration...'
+                sh 'terraform validate'
+            }
+        }
+
+        stage('Plan Terraform Execution') {
+            steps {
+                echo 'Planning Terraform execution...'
+                sh "terraform plan -var-file=${TF_VAR_FILE}"
+            }
+        }
+
+        stage('Apply Terraform Changes') {
+            steps {
+                echo 'Applying Terraform changes...'
+                sh "terraform apply -var-file=${TF_VAR_FILE} -auto-approve"
+            }
+        }
+
+        stage('Fetch EC2 Public IP') {
+            steps {
+                script {
+                    def instance_ip = sh(script: "aws ec2 describe-instances --query 'Reservations[0].Instances[0].Instances[0].PublicIpAddress' --output text", returnStdout: true).trim()
+                    env.INSTANCE_IP = instance_ip
+                    echo "EC2 Instance IP: ${env.INSTANCE_IP}"
+                }
+            }
+        }
+
+        stage('Run Ansible Playbook') {
+            steps {
+                echo 'Running Ansible Playbook...'
+                sh '''
+                    cd ansible
+                    echo "[webserver]" > inventory.ini
+                    echo "ec2-instance ansible_host=${INSTANCE_IP} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/jenkins-key.pem" >> inventory.ini
+                    ansible-playbook -i inventory.ini playbook.yml
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Deployment successful!'
+            mail to: "${EMAIL_RECIPIENTS}",
+                 subject: "Jenkins Pipeline Success: Terraform & Ansible Deployment",
+                 body: "The deployment was successful! Access the application at http://${env.INSTANCE_IP}"
+        }
+
+        failure {
+            echo 'Deployment failed!'
+            mail to: "${EMAIL_RECIPIENTS}",
+                 subject: "Jenkins Pipeline Failed: Terraform & Ansible Deployment",
+                 body: "The Jenkins pipeline failed. Please check the logs."
+        }
+
+        always {
+            echo 'Pipeline execution completed!'
+            script {
+                def userInput = input(message: "Do you want to destroy the infrastructure?", ok: "Destroy", parameters: [booleanParam(defaultValue: false, description: 'Check to confirm', name: 'ConfirmDestroy')])
+                if (userInput) {
+                    stage('Destroy Terraform') {
+                        steps {
+                            echo 'Destroying Terraform resources...'
+                            sh 'terraform destroy -var-file=${TF_VAR_FILE} -auto-approve'
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
