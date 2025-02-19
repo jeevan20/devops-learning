@@ -12,6 +12,12 @@ pipeline {
     }
 
     stages {
+        stage('Cleanup') {
+            steps {
+                cleanWs() 
+            }
+        }
+
         stage('Checkout Repository') {
             steps {
                 echo 'Checking out repository...'
@@ -21,8 +27,9 @@ pipeline {
 
         stage('Setup Verification') {
             steps {
-                echo 'Checking Terraform and AWS CLI installation...'
+                echo 'Checking Terraform, Ansible and AWS CLI installation...'
                 sh 'terraform version'
+                sh 'ansible --version'
                 sh 'aws --version'
             }
         }
@@ -30,28 +37,28 @@ pipeline {
         stage('Initialize Terraform') {
             steps {
                 echo 'Initializing Terraform...'
-                sh 'cd terraform && terraform init'
+                sh 'cd ec2-pipeline/terraform && terraform init -no-color'
             }
         }
 
         stage('Validate Terraform Configuration') {
             steps {
                 echo 'Validating Terraform configuration...'
-                sh 'cd terraform && terraform validate'
+                sh 'cd ec2-pipeline/terraform && terraform validate -no-color'
             }
         }
 
         stage('Plan Terraform Execution') {
             steps {
                 echo 'Planning Terraform execution...'
-                sh 'cd terraform && terraform plan -var-file=${TF_VAR_FILE}'
+                sh 'cd ec2-pipeline/terraform && terraform plan -var-file=${TF_VAR_FILE} -no-color'
             }
         }
 
         stage('Apply Terraform Changes') {
             steps {
                 echo 'Applying Terraform changes...'
-                sh 'cd terraform && terraform apply -var-file=${TF_VAR_FILE} -auto-approve'
+                sh 'cd ec2-pipeline/terraform && terraform apply -var-file=${TF_VAR_FILE} -auto-approve -no-color'
             }
         }
 
@@ -59,7 +66,7 @@ pipeline {
             steps {
                 script {
                     def instance_ip = sh(script: """
-                        cd terraform && terraform output -raw instance_public_ip
+                        cd ec2-pipeline/terraform && terraform output -raw instance_public_ip
                     """, returnStdout: true).trim()
                     if (instance_ip == "None" || instance_ip == "") {
                         error("Failed to retrieve EC2 Public IP. Ensure the instance is running and Terraform output exists.")
@@ -75,7 +82,7 @@ pipeline {
                 echo 'Running Ansible Playbook...'
                 sh 'sleep 25'
                 
-                dir('ansible') {
+                dir('ec2-pipeline/ansible') {
                     sh 'cp /var/jenkins_home/.ssh/jenkins-key.pem .'
                     sh 'chmod 400 jenkins-key.pem'
                     sh 'echo "${INSTANCE_IP}"'
@@ -121,7 +128,7 @@ pipeline {
                 //         }
                 //     }
                 // }
-                sh 'cd terraform && terraform destroy -var-file=${TF_VAR_FILE} -auto-approve'
+                sh 'cd ec2-pipeline/terraform && terraform destroy -var-file=${TF_VAR_FILE} -auto-approve -no-color'
                 cleanWs()
                 sh 'echo "The workspace has been cleared successfully"'
             }
